@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
 
+import org.mindrot.jbcrypt.BCrypt;
 import weblab4.model.Point;
 
 public class ConnectToDB {
@@ -117,11 +118,12 @@ public class ConnectToDB {
             return "Логин уже используется";
         }
 
+        String hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt());
         // Генерация токена
         String token = generateToken();
 
         // Вставка новой записи в таблицу users
-        if (insertUser(login, password, token)) {
+        if (insertUser(login, hashedPassword, token)) {
             return token;
         } else {
             return "Логин";
@@ -147,18 +149,25 @@ public class ConnectToDB {
         }
     }
 
-    public boolean userValid(String login, String password){
+    public boolean userValid(String login, String password) {
         try {
-            String query = "SELECT * FROM users WHERE login=? AND password=?";
+            String query = "SELECT * FROM users WHERE login=?";
             PreparedStatement preparedStatement = connection.prepareStatement(query);
             preparedStatement.setString(1, login);
-            preparedStatement.setString(2, password);
             ResultSet resultSet = preparedStatement.executeQuery();
-            return resultSet.next();
+
+            if (resultSet.next()) {
+                // Retrieve the hashed password from the database
+                String hashedPasswordFromDB = resultSet.getString("password");
+
+                // Use BCrypt to verify the entered password against the hashed password
+                return BCrypt.checkpw(password, hashedPasswordFromDB);
+            }
         } catch (SQLException e) {
             e.printStackTrace();
             return false;
         }
+        return false;
     }
 
     public boolean insertUser(String user, String password, String token) {
